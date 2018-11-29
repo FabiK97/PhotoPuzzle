@@ -2,6 +2,7 @@ package com.example.photopuzzle;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.ContentResolver;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
@@ -30,6 +31,7 @@ import android.widget.LinearLayout;
 import android.widget.Toast;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -43,6 +45,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     ImageButton[] buttons = new ImageButton[9];
     float initX, initY, deltaX, deltaY;
     ImageButton collision;
+    Uri imageFileUri;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -133,14 +136,14 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
                             .x(initX)
                             .y(initY)
                             .z(1)
-                            .setDuration(500)
+                            .setDuration(100)
                             .start();
 
                     v.animate()
                             .x(collision.getX())
                             .y(collision.getY())
                             .z(1)
-                            .setDuration(500)
+                            .setDuration(100)
                             .start();
 
 
@@ -186,8 +189,9 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
 
             File file = null;
             try {
-                file = File.createTempFile("PuzzleImage",".jpg", getExternalFilesDir(Environment.DIRECTORY_PICTURES));
-            } catch (IOException e) {
+                //file = File.createTempFile("PuzzleImage",".jpg", getExternalFilesDir(Environment.DIRECTORY_PICTURES));
+                file = new File(getExternalFilesDir(Environment.DIRECTORY_PICTURES), "PuzzleImage.jgp");
+            } catch (Exception e) {
                 e.printStackTrace();
             }
 
@@ -198,37 +202,34 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     }
 
     public void takePicture() {
-        Uri imageFile = prepareFile();
-        Log.w("URI", imageFile.toString());
+        this.imageFileUri = prepareFile();
+        Log.w("URI", this.imageFileUri.toString());
 
-        if(imageFile != null) {
+        if(this.imageFileUri != null) {
             Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
             intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-            intent.putExtra(MediaStore.EXTRA_OUTPUT, imageFile);
+            intent.putExtra(MediaStore.EXTRA_OUTPUT, this.imageFileUri);
             startActivityForResult(intent, IMAGE_PATH);
         }
     }
 
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
-        Log.d("RESULT", "onActivityResult: " + resultCode + " requ: " + requestCode);
         if (resultCode != Activity.RESULT_CANCELED && requestCode == IMAGE_PATH) {
-           // Toast.makeText(this, resultCode, Toast.LENGTH_SHORT).show();
-            Toast.makeText(this, data.toString(), Toast.LENGTH_SHORT).show();
-            this.setPhoto();
+                this.setPhoto();
         }
     }
 
     public File getFile(){
         File dir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
-
+        Log.d("FILESPATH", "getFile: " + imageFileUri.getPath().substring(imageFileUri.getPath().indexOf("PuzzleImage")));
         if (dir.exists()) {
             File[] files = dir.listFiles();
             if(files != null) {
                 for (int i = 0; i < files.length; ++i) {
                     File file = files[i];
-                    if(file.getName().contains("PuzzleImage")) {
-                        Toast.makeText(this, file.getName(), Toast.LENGTH_SHORT).show();
+                    Log.d("FILES", "getFile: " + file.getName());
+                    if(file.getName().contains(imageFileUri.getPath().substring(imageFileUri.getPath().indexOf("PuzzleImage")))) {
                         return file;
                     }
                 }
@@ -238,21 +239,30 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     }
 
     public void setPhoto(){
-        File imageFile = getFile();
-        Bitmap imgBitmap = BitmapFactory.decodeFile(imageFile.getAbsolutePath());
-        imgBitmap = shapeIntoSqare(imgBitmap);
 
-        Bitmap cutBitmap = null;
-        int id = 0;
-        for(int y = 0; y < 3; y++){
-            for(int x = 0; x < 3; x++){
-                cutBitmap = cutBitmap(imgBitmap, x, y);
-                buttons[id].setImageBitmap(cutBitmap);
-                id++;
+
+        try {
+
+            Bitmap imgBitmap;
+            imgBitmap = BitmapFactory.decodeStream(getContentResolver().openInputStream(this.imageFileUri));
+
+            imgBitmap = shapeIntoSqare(imgBitmap);
+
+            Bitmap cutBitmap = null;
+            int id = 0;
+            for(int y = 0; y < 3; y++){
+                for(int x = 0; x < 3; x++){
+                    cutBitmap = cutBitmap(imgBitmap, x, y);
+                    buttons[id].setImageBitmap(cutBitmap);
+                    id++;
+                }
             }
+
+        } catch(FileNotFoundException ex) {
+            Log.d("FILENOTFOUND", ex.toString());
+            Toast.makeText(this, "Ein Fehler ist aufgetreten: File wurde nicht gefunden!", Toast.LENGTH_SHORT).show();
         }
 
-        //.setImageBitmap(imgBitmap);
     }
 
     public Bitmap shapeIntoSqare(Bitmap src) {
@@ -273,6 +283,12 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     }
 
     public Bitmap cutBitmap(Bitmap src,int row, int col){
+        try {
+            wait(1000);
+        } catch(Exception ex) {
+            ex.printStackTrace();
+        }
+
         int length = src.getWidth()/3;
         int x = length*row;
         int y = length*col;
